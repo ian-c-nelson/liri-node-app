@@ -18,7 +18,10 @@
   },
   "homepage": "https://github.com/ian-c-nelson/liri-node-app#readme",
   "dependencies": {
+    "chalk": "^2.4.1",
     "dotenv": "^6.1.0",
-    "node-spotify-api": "^1.0.7"
+    "inquirer": "^6.2.0",
+    "node-spotify-api": "^1.0.7",
+    "rxjs": "^6.3.3"
   }
 }
