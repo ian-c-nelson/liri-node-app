@@ -8,27 +8,24 @@ const chalk = require('chalk');
 const inquirer = require("inquirer");
 const Rx = require("rxjs");
 const fs = require("fs");
+const axios = require("axios");
+const moment = require('moment');
 
 // instantiate our objects for later use.
 const spotify = new Spotify(keys.spotify);
 const prompts = new Rx.Subject();
 const log = console.log;
 
-
 // get input from CLI using inquirer and rx
-let action = "";
-let target = "";
+var action = "";
+var target = "";
 
 //create dynamic interface with inquirer and rx.
 inquirer.prompt(prompts).ui.process.subscribe({
     next: response => {
-
-
         // if it's the 'action' question set the answer to the action variable and check to see if a second response is required.
         if (response.name === "action") {
             action = response.answer;
-
-            log(chalk.blue(response));
 
             // define the base question object.
             let nextPrompt = {
@@ -67,10 +64,12 @@ inquirer.prompt(prompts).ui.process.subscribe({
             prompts.complete();
         }
     },
-    error: err => log(chalk.red("An error has occurred: " + err)),
+    error: err => logError(err),
     complete: () => {
-        log(chalk.blue({ action, target }));
-        log(chalk.yellow("\nComplete"))
+        // log the action then execute it.
+        logNormal("");
+        logNormal(action + ": " + target, 1);
+        doAction(action, target);
     },
 });
 
@@ -79,67 +78,140 @@ prompts.next({
     type: "list",
     message: "Select an action.",
     choices: ["concert-this", "movie-this", "spotify-this-song", "do-what-it-says"],
-    default: "do-what-it-says",
+    default: "spotify-this-song",
     name: "action"
 });
 
-
-
-function doAction(action, input) {
+// define the action functions
+function doAction(action, target) {
     switch (action) {
         case "concert-this":
-            concertThis(input);
+            concertThis(target);
             break;
+
         case "spotify-this-song":
-            spotifyThisSong(input);
+            spotifyThisSong(target);
             break;
+
         case "movie-this":
-            movieThis(input);
+            movieThis(target);
             break;
+
         case "do-what-it-says":
-
             // read file and get action/input from it
+            readFile("./random.txt", text => {
+                // the contents of the file should be comma delimited.
+                var argArray = text.split(",");
 
-            doAction(action, target);
-
+                // call this function recursively with the action/target from the file.
+                doAction(argArray[0], argArray[1]);
+            })
             break;
 
         default:
-
-            log(action + " is not a valid action.");
-
+            logError(action + " is not a valid action.");
             break;
     }
-
 }
 
 function concertThis(artist) {
-    // TODO some stuff
-    log("Get Concert");
+    let queryUrl = "https://rest.bandsintown.com/artists/" + artist + "/events?app_id=codingbootcamp";
+    axios.get(queryUrl)
+        .then(({ data }) => {
+            logNormal("");
+
+            if (!data.length) {
+                logNormal("\nNo events have been found for " + artist);
+            } else {
+                logNormal("\n " + data.length + " event" + (data.length ? "s have" : " has") + " been found for " + artist);
+
+                for (let i = 0; i < data.length; i++) {
+                    logNormal("=== Event #: " + (i + 1) + " =====================================================");
+                    if (data[i].description) {
+                        logNormal(" Event Name: " + data[i].description);
+                    }
+
+                    if (data[i].datetime) {
+                        logNormal(" Event Date: " + moment(data[i].datetime).format("MM/DD/YYYY"));
+                    }
+
+                    if (data[i].venue) {
+                        logNormal("      Venue: " + data[i].venue.name + ", " + data[i].venue.city + ", " + data[i].venue.region + ", " + data[i].venue.country);
+                    }
+
+                    logNormal("====================================================================", 1);
+                }
+            }
+        })
+        .catch(err => logError(err));
 }
 
 function spotifyThisSong(song) {
-    log("Spotify It");
+    spotify.search({ type: 'track', query: song }, (err, data) => {
+        if (err) {
+            logError(err);
+        }
+
+        logNormal(data,1);
+    });
 }
 
 function movieThis(movie) {
     log("Muh moovie");
 }
 
-function readFile(filePath) {
+function readFile(filePath, callback) {
     log("Read it!");
 
-    fs.readFile("./best_things_ever.txt", "utf8", (error, data) => {
-        // Then split it by commas (to make it more readable)
-        var dataArr = data.split(",");
+    if (!filePath) {
+        logError("A file path must be provided.");
+    }
 
-        console.log("");
-        console.log("These are the best things EVAR!")
+    if (typeof callback !== "function") {
+        logError("Callback must be a function.");
+    }
 
-        dataArr.forEach(thing => console.log("   " + thing.trim()))
+    fs.readFile(filePath, "utf8", (err, data) => {
+
+        if (err) {
+            throw (err);
+        }
+
+        callback(data);
     });
 }
 
-function appendToFile(filePath, text) {
+function appendToFile(filePath, text, callback) {
     log("Write it!");
+
+    if (!filePath) {
+        throw new Error("A file path must be provided.")
+    }
+
+    if (typeof callback !== "function") {
+        throw new Error("Callback must be a function.")
+    }
+
+    fs.appendFile(filePath, text, err => logError(err));
+}
+
+function logError(err) {
+    if (typeof err !== "string") {
+        err = JSON.stringify(err, null, 2);
+    }
+    log(chalk.red("\nAn error has occurred:\n" + err + "\n"));
+}
+
+function logNormal(item, addLineCount) {
+    if (typeof item !== "string") {
+        item = JSON.stringify(item, null, 2);
+    }
+
+    log(chalk.yellow(item));
+
+    if (addLineCount) {
+        for (let i = 0; i < addLineCount; i++) {
+            log("");
+        }
+    }
 }
