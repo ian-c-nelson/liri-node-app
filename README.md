@@ -1,7 +1,7 @@
 # liri-node-app
-###Node js homework.
+### Node js homework.
 
-###An application that accepts one of four different commands.
+### An application that accepts one of four different commands.
 1. concert-this
 
 ... Makes a request to www.bandsintown.com to retreive event information using axios.
