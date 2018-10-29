@@ -1,3 +1,31 @@
+// add a function to String to allow replace all instances of a substring.
+String.prototype.replaceAll = function (replaceStr, replaceStrWith) {
+    return this.split(replaceStr).join(replaceStrWith);
+}
+
+String.prototype.padLeft = function (padChar, length) {
+    length = parseInt(length);
+    let temp = this;
+
+    while (temp.length < length) {
+        temp = padChar + temp;
+    }
+
+    return temp;
+}
+
+String.prototype.padRight = function (padChar, length) {
+    length = parseInt(length);
+    let temp = this;
+
+    while (temp.length < length) {
+        temp = temp + padChar;
+    }
+
+    return temp;
+}
+
+
 // init dotenv
 require("dotenv").config();
 
@@ -8,13 +36,13 @@ const chalk = require('chalk');
 const inquirer = require("inquirer");
 const Rx = require("rxjs");
 const fs = require("fs");
+var path = require("path");
 const axios = require("axios");
 const moment = require('moment');
 
 // instantiate our objects for later use.
 const spotify = new Spotify(keys.spotify);
 const prompts = new Rx.Subject();
-const log = console.log;
 
 // get input from CLI using inquirer and rx
 var action = "";
@@ -37,19 +65,19 @@ inquirer.prompt(prompts).ui.process.subscribe({
             switch (response.answer) {
                 case "concert-this":
                     nextPrompt.message = "Input an artist to get concert information.";
-                    nextPrompt.default = "Ace of Base"
+                    nextPrompt.default = "St. Vincent"
                     prompts.next(nextPrompt);
                     break;
 
                 case "spotify-this-song":
                     nextPrompt.message = "Input a song to get Spotify information.";
-                    nextPrompt.default = "The Sign by Ace of Base"
+                    nextPrompt.default = "\"The Sign\" by Ace of Base"
                     prompts.next(nextPrompt);
                     break;
 
                 case "movie-this":
                     nextPrompt.message = "Input a movie to get IMDB information.";
-                    nextPrompt.default = "Mr. Nobody."
+                    nextPrompt.default = "Mr. Nobody"
                     prompts.next(nextPrompt);
                     break;
 
@@ -64,13 +92,13 @@ inquirer.prompt(prompts).ui.process.subscribe({
             prompts.complete();
         }
     },
-    error: err => logError(err),
+    error: err => log(err, "error"),
     complete: () => {
         // log the action then execute it.
-        logNormal("");
-        logNormal(action + ": " + target, 1);
+        log();
+        log(action + ": " + target, "text");
         doAction(action, target);
-    },
+    }
 });
 
 //initiate the first question.
@@ -78,7 +106,7 @@ prompts.next({
     type: "list",
     message: "Select an action.",
     choices: ["concert-this", "movie-this", "spotify-this-song", "do-what-it-says"],
-    default: "spotify-this-song",
+    default: "movie-this",
     name: "action"
 });
 
@@ -109,66 +137,212 @@ function doAction(action, target) {
             break;
 
         default:
-            logError(action + " is not a valid action.");
+            log(action + " is not a valid action.", "error");
             break;
     }
 }
 
+// execute movie-this operation using bandsintown and axios.
 function concertThis(artist) {
-    let queryUrl = "https://rest.bandsintown.com/artists/" + artist + "/events?app_id=codingbootcamp";
+    let queryUrl = "https://rest.bandsintown.com/artists/" + artist.replaceAll(" ", "+") + "/events?app_id=codingbootcamp";
     axios.get(queryUrl)
         .then(({ data }) => {
-            logNormal("");
+            log();
 
             if (!data.length) {
-                logNormal("\nNo events have been found for " + artist);
+                log("\nNo events have been found for " + artist);
             } else {
-                logNormal("\n " + data.length + " event" + (data.length ? "s have" : " has") + " been found for " + artist);
+                log("Data provided by bandsintown.")
+                log("\n " + data.length + " event" + (data.length !== 1 ? "s have" : " has") + " been found for " + artist);
 
                 for (let i = 0; i < data.length; i++) {
-                    logNormal("=== Event #: " + (i + 1) + " =====================================================");
+                    log(("=== Event #: " + (i + 1) + " ").padRight("=", 100), "divider");
+
                     if (data[i].description) {
-                        logNormal(" Event Name: " + data[i].description);
+                        log({
+                            label: " Event Name: ",
+                            value: data[i].description
+                        }, "value-pair");
                     }
 
                     if (data[i].datetime) {
-                        logNormal(" Event Date: " + moment(data[i].datetime).format("MM/DD/YYYY"));
+                        log({
+                            label: " Event Date: ",
+                            value: moment(data[i].datetime).format("MM/DD/YYYY")
+                        }, "value-pair");
                     }
 
                     if (data[i].venue) {
-                        logNormal("      Venue: " + data[i].venue.name + ", " + data[i].venue.city + ", " + data[i].venue.region + ", " + data[i].venue.country);
+                        log({
+                            label: "      Venue: ",
+                            value: data[i].venue.name + ", " + data[i].venue.city + ", " + data[i].venue.region + ", " + data[i].venue.country
+                        }, "value-pair");
                     }
 
-                    logNormal("====================================================================", 1);
+                    log("".padLeft("=", 100), "divider");
                 }
             }
         })
-        .catch(err => logError(err));
+        .catch(err => log(err, "error"));
 }
 
-function spotifyThisSong(song) {
-    spotify.search({ type: 'track', query: song }, (err, data) => {
+// execute movie-this operation using OMDB and axios.
+function movieThis(movie) {
+    let queryUrl = "https://www.omdbapi.com/?apikey=trilogy&t=" + movie.replaceAll(" ", "+") + "&plot=short";
+
+    axios.get(queryUrl)
+        .then(({ data }) => {
+            log("Data provided by OMDB.")
+            log("".padLeft("=", 100), "divider");
+            if (data.Title) {
+                log({
+                    label: "    Movie Title: ",
+                    value: data.Title
+                }, "value-pair");
+            }
+
+            if (data.Released) {
+                log({
+                    label: "   Release Date: ",
+                    value: moment(data.Released, "DD MMM YYYY").format("MM/DD/YYYY")
+                }, "value-pair");
+            }
+
+            if (data.Rated) {
+                log({
+                    label: "          Rated: ",
+                    value: data.Rated
+                }, "value-pair");
+            }
+
+            if (data.Ratings) {
+                data.Ratings.forEach(rating => {
+                    if (rating.Source === "Rotten Tomatoes") {
+                        log({
+                            label: "Rotten Tomatoes: ",
+                            value: rating.Value
+                        }, "value-pair");
+                    }
+                });
+            }
+
+            if (data.Country) {
+                log({
+                    label: "    Produced In: ",
+                    value: data.Country
+                }, "value-pair");
+            }
+
+            if (data.Language) {
+                log({
+                    label: "       Language: ",
+                    value: data.Language
+                }, "value-pair");
+            }
+
+            if (data.Actors) {
+                log({
+                    label: "         Actors: ",
+                    value: data.Actors
+                }, "value-pair");
+            }
+
+            if (data.Plot) {
+                log({
+                    label: "           Plot: ",
+                    value: data.Plot
+                }, "value-pair");
+            }
+
+            log("".padLeft("=", 100), "divider");
+        })
+        .catch(err => log(err, "error"));
+
+
+}
+
+// execute spotify-this-song operation using node-spitify-api.
+function spotifyThisSong(query) {
+    // added a filter for (some) karaoke garbage.  Using quotes to make sure the order of key words is kept
+    var noKaraokeQuery = ("\"" + query + "\"" + " NOT \"karaoke\"").replaceAll(" ", "%20");
+
+    spotify.search({ type: 'track', query: noKaraokeQuery, limit: 50 }, (err, data) => {
         if (err) {
-            logError(err);
+            log(err, "error");
         }
 
-        logNormal(data,1);
+        // If more than one track is received sort descending by popularity and keep the top 5.
+        let tracks = data.tracks.items;
+        if (tracks.length > 1) {
+            tracks = tracks.sort((a, b) => {
+                return b.popularity - a.popularity;
+            }).slice(0, 5);
+        }
+
+        log("Data provided by Spotify.")
+        log("Note: Karaoke tracks have been filtered out to improve the quality of the results.")
+
+        if (!data.tracks || !data.tracks.total) {
+            log("\nNo tracks have been found for " + query);
+        } else {
+            log("\n " + data.tracks.total + " track" + (data.tracks.total !== 1 ? "s have" : " has") + " been found for " + query + ". The first 5 are listed below.");
+
+            for (let i = 0; i < tracks.length; i++) {
+                let track = tracks[i];
+                let artist = track.artists[0];
+                let album = track.album;
+
+                log(("=== Track #: " + (i + 1) + " ").padRight("=", 100), "divider");
+
+                if (track.artists[0]) {
+                    log({
+                        label: "   Track Name: ",
+                        value: track.name
+                    }, "value-pair");
+                }
+
+                if (artist) {
+                    log({
+                        label: "       Artist: ",
+                        value: artist.name
+                    }, "value-pair");
+                }
+
+                if (album) {
+                    log({
+                        label: "        Album: ",
+                        value: album.name
+                    }, "value-pair");
+                }
+
+                if (track.preview_url) {
+                    log({
+                        label: "  Preview Url: ",
+                        value: track.preview_url
+                    }, "value-pair");
+                }
+
+                if (track.popularity != undefined) {
+                    log({
+                        label: "   Popularity: ",
+                        value: track.popularity
+                    }, "value-pair");
+                }
+
+                log("".padLeft("=", 100), "divider");
+            }
+        }
     });
 }
 
-function movieThis(movie) {
-    log("Muh moovie");
-}
-
+// read a file
 function readFile(filePath, callback) {
-    log("Read it!");
-
     if (!filePath) {
-        logError("A file path must be provided.");
+        log("A file path must be provided.", "error");
     }
 
     if (typeof callback !== "function") {
-        logError("Callback must be a function.");
+        log("Callback must be a function.", "error");
     }
 
     fs.readFile(filePath, "utf8", (err, data) => {
@@ -181,37 +355,82 @@ function readFile(filePath, callback) {
     });
 }
 
-function appendToFile(filePath, text, callback) {
-    log("Write it!");
-
-    if (!filePath) {
-        throw new Error("A file path must be provided.")
+// append to a file.
+function appendToFile(filePath, text, synchronous) {
+    var endOfLine = require("os").EOL;
+    let fp = path.join(__dirname, filePath)
+    if(synchronous) {
+        fs.appendFileSync(fp, text + endOfLine, err => {});
+    } else {
+        fs.appendFile(fp, text + endOfLine, err => {});
     }
-
-    if (typeof callback !== "function") {
-        throw new Error("Callback must be a function.")
-    }
-
-    fs.appendFile(filePath, text, err => logError(err));
 }
 
-function logError(err) {
-    if (typeof err !== "string") {
-        err = JSON.stringify(err, null, 2);
-    }
-    log(chalk.red("\nAn error has occurred:\n" + err + "\n"));
-}
+// handle different logging scenarios
+function log(item, type, addLineCount) {
+    item = item || "";
+    type = type || "text"
 
-function logNormal(item, addLineCount) {
-    if (typeof item !== "string") {
-        item = JSON.stringify(item, null, 2);
+    let writeLog = function(text) {
+        appendToFile("log.txt", text, true);
     }
 
-    log(chalk.yellow(item));
+    switch (type.toLowerCase()) {
+        case "value-pair":
+            // parse out the item pair object and print it out in pretty chunks of roughly 100 chars in width
+            let paddingWidth = item.label.length;
+            let chunkLength = 100 - paddingWidth;
 
+            if (item.value.length <= chunkLength || item.value.toString().indexOf(" ") === -1) {
+                console.log(chalk.green(item.label) + chalk.cyan(item.value));
+                writeLog(item.label + item.value);
+            } else {
+                let valChunks = [];
+                let temp = temp1 = item.value;
+                while (temp.length > 0) {
+                    if (temp.length < chunkLength) {
+                        temp1 = temp;
+                    } else {
+                        temp1 = temp.substr(0, chunkLength + 1);
+                        temp1 = temp1.substr(0, temp1.lastIndexOf(" "));
+                    }
+
+                    valChunks.push(temp1.trim());
+                    temp = temp.substr(temp1.length);
+                }
+
+                valChunks.forEach((chunk, i) => {
+                    if (i === 0) {
+                        console.log(chalk.green(item.label) + chalk.cyan(chunk));
+                        writeLog(item.label + chunk);
+
+                    } else {
+                        var padding = "".padLeft(" ", paddingWidth);
+                        console.log(padding + chalk.cyan(chunk));
+                        writeLog(padding + chunk);
+                    }
+                });
+            }
+            break;
+        case "error":
+            console.log(chalk.red(item));
+            // writeLog(item);
+            break;
+        case "divider":
+            console.log(chalk.gray(item));
+            writeLog(item);
+            break;
+        default:
+            console.log(item);
+            writeLog(item);
+            break;
+    }
+
+    // if extra lines were requested log them.
     if (addLineCount) {
         for (let i = 0; i < addLineCount; i++) {
-            log("");
+            console.log("");
+            writeLog("");
         }
     }
 }
