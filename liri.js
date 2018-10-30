@@ -40,7 +40,7 @@ const Rx = require("rxjs");
 const fs = require("fs");
 var path = require("path");
 const axios = require("axios");
-const moment = require('moment');
+const moment = require("moment");
 
 // instantiate our objects for later use.
 const spotify = new Spotify(keys.spotify);
